@@ -1,0 +1,310 @@
+在线语音合成API文档
+#接口说明
+语音合成流式接口将文字信息转化为声音信息，同时提供了众多极具特色的发音人（音库）供您选择，可以在 这里 在线体验发音人效果。
+该语音能力是通过Websocket API的方式给开发者提供一个通用的接口。Websocket API具备流式传输能力，适用于需要流式数据传输的AI服务场景。相较于SDK，API具有轻量、跨语言的特点；相较于HTTP API，Websocket API协议有原生支持跨域的优势。
+
+语音合成流式API JAVA-SDK-DEMO调用视频说明请点击 这里 观看。
+
+原WebAPI普通版本接口(http[s]: //api.xfyun.cn/v1/service/v1/tts) 不再对外开放，已经使用WebAPI普通版本的用户仍可使用，同时也欢迎体验新版流式接口并尽快完成迁移~
+
+小语种及少数民族方言：
+
+目前新增：韩语、日语、维吾尔语、藏语、法语、俄语、西班牙语、印地语、德语、越南语、巴西葡萄牙语、意大利语、葡萄牙语、泰语、乌尔都语；
+使用小语种时上传文本编码推荐使用UTF8的编码方式；
+需先在控制台开启小语种发音人才可合成小语种，否则报错11200。
+注意：测试或正式使用前，请去对应产品页面获取免费额度或下单购买正式套餐（语音合成创建应用后默认有每日500次调用）；同时需要去控制台服务页面，获取API有效密钥（AppID、APIKey、APISecret）后再调用。
+语音合成产品页面
+语音合成服务页
+
+#接口Demo
+示例demo请点击 这里 下载。
+目前仅提供部分开发语言的demo，其他语言请参照下方接口文档进行开发。
+也欢迎热心的开发者到 讯飞开放平台社区 分享你们的demo。
+
+#接口要求
+集成在线语音合成流式API时，需按照以下要求。
+
+内容	说明
+请求协议	ws[s]（为提高安全性，强烈推荐wss）
+请求地址	ws[s]: //tts-api.xfyun.cn/v2/tts
+请求行	GET /v2/tts HTTP/1.1
+接口鉴权	签名机制，详情请参照下方接口鉴权
+字符编码	UTF8、GB2312、GBK、BIG5、UNICODE、GB18030
+响应格式	统一采用JSON格式
+开发语言	任意，只要可以向讯飞云服务发起Websocket请求的均可
+操作系统	任意
+音频属性	采样率16k或8k
+音频格式	pcm、mp3、speex（8k）、speex-wb（16k）、opus
+文本长度	单次调用长度需小于8000字节（约2000汉字）
+发音人	中英粤多语种、川豫多方言、小语种、男女声多风格，可以在 这里 在线体验发音人效果
+#接口调用流程
+通过接口密钥基于hmac-sha256计算签名，向服务器端发送Websocket协议握手请求。详见下方 接口鉴权 。
+握手成功后，客户端通过Websocket连接同时上传和接收数据。数据上传完毕，客户端需要上传一次数据结束标识。详见下方 接口数据传输与接收 。
+接收到服务器端的结果全部返回标识后断开Websocket连接。
+注： Websocket使用注意事项如下
+
+服务端支持的websocket-version 为13，请确保客户端使用的框架支持该版本。
+服务端返回的所有的帧类型均为TextMessage，对应于原生websocket的协议帧中opcode=1，请确保客户端解析到的帧类型一定为该类型，如果不是，请尝试升级客户端框架版本，或者更换技术框架。
+如果出现分帧问题，即一个json数据包分多帧返回给了客户端，导致客户端解析json失败。出现这种问题大部分情况是客户端的框架对websocket协议解析存在问题，如果出现请先尝试升级框架版本，或者更换技术框架。
+客户端会话结束后如果需要关闭连接，尽量保证传给服务端的错误码为websocket错误码1000（如果客户端框架没有提供关闭时传错误码的接口。则无需关注本条）。
+#白名单
+默认关闭IP白名单，即该服务不限制调用IP。
+在调用该业务接口时
+
+若关闭IP白名单，接口认为IP不限，不会校验IP。
+若打开IP白名单，则服务端会检查调用方IP是否在讯飞开放平台配置的IP白名单中，对于没有配置到白名单中的IP发来的请求，服务端会拒绝服务。
+IP白名单规则
+
+在 控制台-相应服务的IP白名单处编辑，保存后五分钟左右生效。
+不同Appid的不同服务都需要分别设置IP白名单。
+IP白名单需设置为外网IP，请勿设置局域网IP；
+如果握手阶段返回{"message":"Your IP address is not allowed"}，则表示由于IP白名单配置有误或还未生效，服务端拒绝服务。
+#接口鉴权
+在握手阶段，请求方需要对请求进行签名，服务端通过签名来校验请求的合法性。
+
+#鉴权方法
+通过在请求地址后面加上鉴权相关参数的方式。示例url：
+
+wss://tts-api.xfyun.cn/v2/tts?authorization=aG1hYyB1c2VybmFtZT0iZGE0ZjMyOWUyZmQwMGQ1NjE4NjVjNjRkZjU3NDNiMjAiLCBhbGdvcml0aG09ImhtYWMtc2hhMjU2IiwgaGVhZGVycz0iaG9zdCBkYXRlIHJlcXVlc3QtbGluZSIsIHNpZ25hdHVyZT0ic1RtbzRobDBMdmRLWTRLRjltcGJKV0htRFFzNC8xZ2ZPdUgwZnBZbVdnbz0i&date=Thu%2C%2001%20Aug%202019%2001%3A53%3A21%20GMT&host=tts-api.xfyun.cn
+鉴权参数：
+
+参数	类型	必须	说明	示例
+host	string	是	请求主机	tts-api.xfyun.cn
+date	string	是	当前时间戳，RFC1123格式	Thu, 01 Aug 2019 01:53:21 GMT
+authorization	string	是	使用base64编码的签名相关信息(签名基于hmac-sha256计算)	参考下方authorization参数生成规则
+· date参数生成规则
+
+date必须是UTC+0或GMT时区，RFC1123格式(Thu, 01 Aug 2019 01:53:21 GMT)。
+服务端会对Date进行时钟偏移检查，最大允许300秒的偏差，超出偏差的请求都将被拒绝。
+
+· authorization参数生成规则
+
+1）获取接口密钥APIKey 和 APISecret。
+在讯飞开放平台控制台，创建应用进入语音合成（流式版）服务后即可查看，均为32位字符串。
+
+2）参数authorization base64编码前（authorization_origin）的格式如下。
+
+api_key="$api_key",algorithm="hmac-sha256",headers="host date request-line",signature="$signature"
+其中 api_key 是在控制台获取的APIKey，algorithm 是加密算法（仅支持hmac-sha256），headers 是参与签名的参数（见下方注释）。
+signature 是使用加密算法对参与签名的参数签名后并使用base64编码的字符串，详见下方。
+
+注： headers是参与签名的参数，请注意是固定的参数名（"host date request-line"），而非这些参数的值。
+
+3）signature的原始字段(signature_origin)规则如下。
+
+signature原始字段由 host，date，request-line三个参数按照格式拼接成，
+拼接的格式为(\n为换行符,’:’后面有一个空格)：
+
+host: $host\ndate: $date\n$request-line
+假设
+
+请求url = wss://tts-api.xfyun.cn/v2/tts
+date = Thu, 01 Aug 2019 01:53:21 GMT
+那么 signature原始字段(signature_origin)则为：
+
+host: tts-api.xfyun.cn
+date: Thu, 01 Aug 2019 01:53:21 GMT
+GET /v2/tts HTTP/1.1
+4）使用hmac-sha256算法结合apiSecret对signature_origin签名，获得签名后的摘要signature_sha。
+
+signature_sha=hmac-sha256(signature_origin,$apiSecret)
+其中 apiSecret 是在控制台获取的APISecret
+
+5）使用base64编码对signature_sha进行编码获得最终的signature。
+
+signature=base64(signature_sha)
+假设
+
+APISecret = secretxxxxxxxx2df7900c09xxxxxxxx	
+date = Thu, 01 Aug 2019 01:53:21 GMT
+则signature为
+
+signature=sTmo4hl0LvdKY4KF9mpbJWHmDQs4/1gfOuH0fpYmWgo=
+6）根据以上信息拼接authorization base64编码前（authorization_origin）的字符串，示例如下。
+
+api_key="keyxxxxxxxx8ee279348519exxxxxxxx", algorithm="hmac-sha256", headers="host date request-line", signature="sTmo4hl0LvdKY4KF9mpbJWHmDQs4/1gfOuH0fpYmWgo="
+注： headers是参与签名的参数，请注意是固定的参数名（"host date request-line"），而非这些参数的值。
+
+7）最后再对authorization_origin进行base64编码获得最终的authorization参数。
+
+authorization = base64(authorization_origin)
+示例：
+authorization=aG1hYyB1c2VybmFtZT0iZGE0ZjMyOWUyZmQwMGQ1NjE4NjVjNjRkZjU3NDNiMjAiLCBhbGdvcml0aG09ImhtYWMtc2hhMjU2IiwgaGVhZGVycz0iaG9zdCBkYXRlIHJlcXVlc3QtbGluZSIsIHNpZ25hdHVyZT0ic1RtbzRobDBMdmRLWTRLRjltcGJKV0htRFFzNC8xZ2ZPdUgwZnBZbVdnbz0i
+#鉴权url示例(golang)
+    //@hosturl :  like  wss://tts-api.xfyun.cn/v2/tts
+    //@apikey : apiKey
+    //@apiSecret : apiSecret
+    func assembleAuthUrl(hosturl string, apiKey, apiSecret string) string {
+        ul, err := url.Parse(hosturl)
+        if err != nil {
+            fmt.Println(err)
+        }
+        //签名时间
+        date := time.Now().UTC().Format(time.RFC1123)
+        //参与签名的字段 host ,date, request-line
+        signString := []string{"host: " + ul.Host, "date: " + date, "GET " + ul.Path + " HTTP/1.1"}
+        //拼接签名字符串
+        sgin := strings.Join(signString, "\n")
+        //签名结果
+        sha := HmacWithShaTobase64("hmac-sha256", sgin, apiSecret)
+        //构建请求参数 此时不需要urlencoding
+        authUrl := fmt.Sprintf("api_key=\"%s\", algorithm=\"%s\", headers=\"%s\", signature=\"%s\"", apiKey,
+            "hmac-sha256", "host date request-line", sha)
+        //将请求参数使用base64编码
+        authorization:= base64.StdEncoding.EncodeToString([]byte(authUrl))
+        v := url.Values{}
+        v.Add("host", ul.Host)
+        v.Add("date", date)
+        v.Add("authorization", authorization)
+        //将编码后的字符串url encode后添加到url后面
+        callurl := hosturl + "?" + v.Encode()
+        return callurl
+    }
+
+#鉴权结果
+如果握手成功，会返回HTTP 101状态码，表示协议升级成功；如果握手失败，则根据不同错误类型返回不同HTTP Code状态码，同时携带错误描述信息，详细错误说明如下：
+
+HTTP Code	说明	错误描述信息	解决方法
+401	缺少authorization参数	{“message”:”Unauthorized”}	检查是否有authorization参数，详情见authorization参数详细生成规则
+401	签名参数解析失败	{“message”:”HMAC signature cannot be verified”}	检查签名的各个参数是否有缺失是否正确，特别确认下复制的api_key是否正确
+401	签名校验失败	{“message”:”HMAC signature does not match”}	签名验证失败，可能原因有很多。
+1. 检查api_key,api_secret 是否正确。
+2.检查计算签名的参数host，date，request-line是否按照协议要求拼接。
+3. 检查signature签名的base64长度是否正常(正常44个字节)。
+403	时钟偏移校验失败	{“message”:”HMAC signature cannot be verified, a valid date or x-date header is required for HMAC Authentication”}	检查服务器时间是否标准，相差5分钟以上会报此错误
+403	IP白名单校验失败	{"message":"Your IP address is not allowed"}	可在控制台关闭IP白名单，或者检查IP白名单设置的IP地址是否为本机外网IP地址
+握手失败返回示例：
+
+    HTTP/1.1 401 Forbidden
+    Date: Thu, 06 Dec 2018 07:55:16 GMT
+    Content-Length: 116
+    Content-Type: text/plain; charset=utf-8
+    {
+        "message": "HMAC signature does not match"
+    }
+#接口数据传输与接收
+握手成功后客户端和服务端会建立websocket连接，客户端通过websocket连接可以同时上传和接收数据。
+
+客户端每次会话只用发送一次文本数据和参数，引擎有合成结果时会推送给客户端。当引擎的数据合成完毕时，会返回结束标识，具体为：
+
+{
+  "data":{
+      ....#其他参数
+      "status":2
+  }  
+}
+#请求参数
+请求数据均为json字符串
+
+参数名	类型	必传	描述
+common	object	是	公共参数，详见下方
+business	object	是	业务参数，详见下方
+data	object	是	业务数据流参数，详见下方
+#公共参数说明(common)
+参数名	类型	必传	描述
+app_id	string	是	在平台申请的APPID信息
+#业务参数说明(business)
+参数名	类型	必传	描述	示例
+aue	string	是	音频编码，可选值：
+raw：未压缩的pcm
+lame：mp3 (当aue=lame时需传参sfl=1)
+opus：压缩格式, opus 8k；
+opus-wb：压缩格式，opus 16k;
+speex-org-wb;7： 标准开源speex（for speex_wideband，即16k）数字代表指定压缩等级（默认等级为8）
+speex-org-nb;7： 标准开源speex（for speex_narrowband，即8k）数字代表指定压缩等级（默认等级为8）
+speex;7：压缩格式，压缩等级1~10，默认为7（8k讯飞定制speex）
+speex-wb;7：压缩格式，压缩等级1~10，默认为7（16k讯飞定制speex）
+"raw"
+"speex-org-wb;7" 数字代表指定压缩等级（默认等级为8），数字必传
+标准开源speex编码以及讯飞定制speex说明请参考音频格式说明
+sfl	int	否	需要配合aue=lame使用，开启流式返回
+mp3格式音频
+取值：1 开启	1
+auf	string	否	音频采样率，可选值：
+audio/L16;rate=8000：合成8K 的音频
+audio/L16;rate=16000：合成16K 的音频
+auf不传值：合成16K 的音频	"audio/L16;rate=16000"
+vcn	string	是	发音人，可选值：请到控制台添加试用或购买发音人，添加后即显示发音人参数值	"x4_xiaoyan"
+speed	int	否	语速，可选值：[0-100]，默认为50	50
+volume	int	否	音量，可选值：[0-100]，默认为50	50
+pitch	int	否	音高，可选值：[0-100]，默认为50	50
+bgs	int	否	合成音频的背景音
+0:无背景音（默认值）
+1:有背景音	0
+tte	string	否	文本编码格式
+GB2312
+GBK
+BIG5
+UNICODE(小语种)
+GB18030
+UTF8（小语种推荐使用UTF8编码）	"GBK"
+reg	string	否	设置英文发音方式：
+0：自动判断处理，如果不确定将按照英文词语拼写处理（缺省）
+1：所有英文按字母发音
+2：自动判断处理，如果不确定将按照字母朗读
+默认按英文单词发音	"2"
+rdn	string	否	合成音频数字发音方式
+0：自动判断（默认值）
+1：完全数值
+2：完全字符串
+3：字符串优先	"0"
+#业务参数说明(data)
+参数名	类型	必传	描述
+text	string	是	文本内容，需进行base64编码；
+base64编码前最大长度需小于8000字节，约2000汉字
+status	int	是	数据状态，固定为2
+注：由于流式合成的文本只能一次性传输，不支持多次分段传输，此处status必须为2。
+请求参数示例：
+
+{
+  "common": {
+    "app_id": "12345678"
+  },
+  "business": {
+    "aue": "raw",
+    "vcn": "xiaoyan",
+    "pitch": 50,
+    "speed": 50
+  },
+  "data": {
+    "status": 2,
+    "text": "5q2j5Zyo5Li65oKo5p+l6K+i5ZCI6..."
+  }
+}
+
+数据上传结束标识示例：
+
+    {
+    "data":{
+      "status":2
+        }
+    }
+返回参数说明：
+
+参数名	类型	描述
+code	int	返回码，0表示成功，其它表示异常，详情请参考错误码。
+message	string	描述信息
+data	object	data可能返回为null，参考示例代码时，注意进行非空判断
+data.audio	string	合成后的音频片段，采用base64编码
+data.status	int	当前音频流状态，1表示合成中，2表示合成结束
+data.ced	string	合成进度，指当前合成文本的字节数
+注：请注意合成是以句为单位切割的，若文本只有一句话，则每次返回结果的ced是相同的。
+sid	string	本次会话的id，只在第一帧请求时返回
+返回参数示例
+
+    {
+        "code":0,
+        "message":"success",
+        "sid":"ttsxxxxxxxxxxx",
+        "data":{
+            "audio":"QAfe..........",
+            "ced":"14",
+            "status":2
+        }
+    }
+#注意事项
+1.服务端可能返回data为空的帧，并且错误码为0，这种帧客户端可以直接忽略，不解析。
+2.合成返回的帧长度较大，服务端是可能会出现一个消息分为多个websocket 帧返回给客户端。这个时候客户端需要合并这些帧，当然这些大多数框架已经实现的这个逻辑，不排除少部分框架没有做这个逻辑，导致解析失败。
+3.合成的音频是无意义的音频，这种情况大多是客户端用的字符编码格式和参数中传的不一致。请确保tte传的值和文本编码格式保持一致
+4.合成的音频效果不是期望的效果，可以通过更换发音人解决，（部分发音人需要开通权限！）
+5.部分小语种文本可以使用Unicode编码，且tte=Unicode或者UTF8编码。
