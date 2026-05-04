@@ -171,49 +171,84 @@ String callDeepSeek(String prompt) {
 
     // 读取响应头，检查是否为 chunked 编码
     bool isChunked = false;
-    String headerLine;
-    while (deepseekClient.available()) {
-        headerLine = deepseekClient.readStringUntil('\n');
+    int contentLength = -1;
+    while (deepseekClient.available() || deepseekClient.connected()) {
+        String headerLine = deepseekClient.readStringUntil('\n');
         headerLine.trim();
         if (headerLine.length() == 0) break;  // 空行表示头部结束
         if (headerLine.indexOf("Transfer-Encoding: chunked") >= 0 ||
             headerLine.indexOf("transfer-encoding: chunked") >= 0) {
             isChunked = true;
         }
+        if (headerLine.indexOf("Content-Length:") >= 0) {
+            contentLength = headerLine.substring(15).toInt();
+        }
+        timeout = millis();
+        if (millis() - timeout > 5000) break;
     }
 
     // 读取响应体
-    delay(200);
     String responseBody = "";
-    while (deepseekClient.available()) {
-        responseBody += (char)deepseekClient.read();
+    if (isChunked) {
+        // chunked 编码：逐块读取
+        while (deepseekClient.available() || deepseekClient.connected()) {
+            // 读取 chunk 大小行
+            String sizeLine = deepseekClient.readStringUntil('\n');
+            sizeLine.trim();
+            if (sizeLine.length() == 0) continue;  // 跳过空行
+            int chunkSize = strtol(sizeLine.c_str(), NULL, 16);
+            if (chunkSize == 0) break;  // 0 表示结束
+
+            // 等待并读取 chunk 数据
+            unsigned long chunkTimeout = millis();
+            while (deepseekClient.available() < chunkSize) {
+                if (millis() - chunkTimeout > 5000) break;
+                delay(10);
+            }
+            for (int i = 0; i < chunkSize && deepseekClient.available(); i++) {
+                responseBody += (char)deepseekClient.read();
+            }
+            // 读取 chunk 尾部 \r\n
+            if (deepseekClient.available() >= 2) {
+                deepseekClient.read(); // \r
+                deepseekClient.read(); // \n
+            } else {
+                deepseekClient.readStringUntil('\n'); // 消耗尾部
+            }
+        }
+    } else if (contentLength > 0) {
+        // Content-Length 模式：按指定长度读取
+        unsigned long bodyTimeout = millis();
+        while (responseBody.length() < contentLength) {
+            if (deepseekClient.available()) {
+                responseBody += (char)deepseekClient.read();
+                bodyTimeout = millis();
+            } else if (!deepseekClient.connected() || millis() - bodyTimeout > 5000) {
+                break;
+            } else {
+                delay(10);
+            }
+        }
+    } else {
+        // 未知长度模式：读到连接关闭
+        unsigned long bodyTimeout = millis();
+        while (deepseekClient.connected() || deepseekClient.available()) {
+            if (deepseekClient.available()) {
+                responseBody += (char)deepseekClient.read();
+                bodyTimeout = millis();
+            } else if (millis() - bodyTimeout > 3000) {
+                break;
+            } else {
+                delay(10);
+            }
+        }
     }
     deepseekClient.stop();
-
-    // 如果是 chunked 编码，需要解码
-    if (isChunked) {
-        String decoded = "";
-        int pos = 0;
-        while (pos < responseBody.length()) {
-            // 找到 chunk 大小行（hex数字 + \r\n）
-            int crlfPos = responseBody.indexOf("\r\n", pos);
-            if (crlfPos == -1) break;
-            String sizeStr = responseBody.substring(pos, crlfPos);
-            sizeStr.trim();
-            int chunkSize = strtol(sizeStr.c_str(), NULL, 16);
-            if (chunkSize == 0) break;  // 最后一个 chunk
-            pos = crlfPos + 2;  // 跳过 \r\n
-            // 读取 chunk 数据
-            if (pos + chunkSize <= responseBody.length()) {
-                decoded += responseBody.substring(pos, pos + chunkSize);
-            }
-            pos += chunkSize + 2;  // 跳过 chunk 数据 + 尾部 \r\n
-        }
-        responseBody = decoded;
-    }
     responseBody.trim();
 
     // 调试输出
+    Serial.print("[DEBUG] 响应体长度: ");
+    Serial.println(responseBody.length());
     Serial.print("[DEBUG] 响应体前200字: ");
     Serial.println(responseBody.substring(0, 200));
 
